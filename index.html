@@ -55,9 +55,10 @@
         const getLogsKey = (user) => `gymlog_${__app_id}_logs_${user}`;
         const getTasksKey = (user) => `gymlog_${__app_id}_tasks_${user}`;
         
-        // Dagen van de week voor taken
-        const BEBE_TREADMILL_DAYS = [2, 4, 6]; // Dinsdag=2, Donderdag=4, Zaterdag=6
-        const DAYS_MON_SAT = [1, 2, 3, 4, 5, 6]; // Maandag t/m Zaterdag (0=Zondag is vrij)
+        // Dagen van de week voor taken (0=Zondag, 1=Maandag, ..., 6=Zaterdag)
+        const DAYS_MON_SAT = [1, 2, 3, 4, 5, 6]; // Maandag t/m Zaterdag
+        const DAYS_MON_SUN = [0, 1, 2, 3, 4, 5, 6]; // Maandag t/m Zondag
+        const BEBE_TREADMILL_DAYS = [2, 4, 6]; // Dinsdag, Donderdag, Zaterdag
         const USERS = ['Baba', 'Bebe'];
 
         // --- React Dependencies ---
@@ -81,6 +82,7 @@
         
         const dateStringToDate = (dateString) => {
             const [year, month, day] = dateString.split('-').map(Number);
+            // Belangrijk: Gebruik Date.UTC om lokale tijdzone effecten te vermijden, vooral met getUTCDay()
             return new Date(Date.UTC(year, month - 1, day));
         };
         const getMonthYear = (dateString) => {
@@ -89,27 +91,27 @@
             return date.toLocaleDateString('nl-NL', options);
         };
         
-        // Nieuwe Standaard Routines met 'reps' en Ma-Za logica
+        // Nieuwe Standaard Routines met 'reps' en correcte zondag logica
         const DEFAULT_ROUTINES = {
             Baba: [
                 // Dumbbells: 20 reps (oneven dagen) | 50 reps (even dagen)
                 { id: 'dbs', name: "Dumbbells", day1Target: "20 reps", day2Target: "50 reps", type: 'alternating' },
-                // Treadmill: Elke dag behalve zondag
+                // Loopband: Elke dag behalve zondag (Ma-Za)
                 { id: 'treadmill', name: "Loopband", day1Target: "30 minuten", day2Target: "30 minuten", type: 'dayOfWeek', days: DAYS_MON_SAT },
-                // Sit-ups: Elke dag behalve zondag
-                { id: 'situps', name: "Sit-ups", day1Target: "50 reps", day2Target: "50 reps", type: 'dayOfWeek', days: DAYS_MON_SAT },
-                // Push-ups: Elke dag behalve zondag
-                { id: 'pushups', name: "Push-ups", day1Target: "50 reps", day2Target: "50 reps", type: 'dayOfWeek', days: DAYS_MON_SAT },
+                // Sit-ups: Dagelijks (Inclusief Zondag)
+                { id: 'situps', name: "Sit-ups", day1Target: "50 reps", day2Target: "50 reps", type: 'dayOfWeek', days: DAYS_MON_SUN },
+                // Push-ups: Dagelijks (Inclusief Zondag)
+                { id: 'pushups', name: "Push-ups", day1Target: "50 reps", day2Target: "50 reps", type: 'dayOfWeek', days: DAYS_MON_SUN },
             ],
             Bebe: [
-                // Treadmill: Dinsdag, Donderdag, Zaterdag
+                // Loopband: Dinsdag, Donderdag, Zaterdag
                 { id: 'treadmill', name: "Loopband", day1Target: "30 minuten", day2Target: "30 minuten", type: 'dayOfWeek', days: BEBE_TREADMILL_DAYS },
-                // Sit-ups: Elke dag behalve zondag
+                // Sit-ups: Elke dag behalve zondag (Ma-Za)
                 { id: 'situps', name: "Sit-ups", day1Target: "30 reps", day2Target: "30 reps", type: 'dayOfWeek', days: DAYS_MON_SAT },
             ]
         };
 
-        // --- Task Filtering Logic (Aangepast voor simpele labels) ---
+        // --- Task Filtering Logic ---
         const getTasksForDate = (dateObj, routine, currentUser) => {
             if (!routine || routine.length === 0) return [];
             const dayOfMonth = dateObj.getUTCDate();
@@ -168,7 +170,13 @@
                     
                     const storedTasks = localStorage.getItem(getTasksKey(user));
                     if (storedTasks) {
-                        setCustomTasks(JSON.parse(storedTasks));
+                        // Zorg ervoor dat de geladen taken de nieuwe 'reps' taal gebruiken indien nodig
+                        const parsedTasks = JSON.parse(storedTasks).map(task => ({
+                             ...task,
+                             day1Target: task.day1Target.replace('herhalingen', 'reps'),
+                             day2Target: task.day2Target ? task.day2Target.replace('herhalingen', 'reps') : task.day2Target,
+                        }));
+                        setCustomTasks(parsedTasks);
                     } else {
                         setCustomTasks(DEFAULT_ROUTINES[user] || []);
                     }
@@ -244,7 +252,6 @@
                 const dailyCompletionStatus = Object.keys(logs).reduce((acc, date) => {
                     const logEntry = logs[date];
                     // Gebruik de routine van de huidige gebruiker voor nauwkeurige stats
-                    // Let op: customTasks hier is de routine van de GESELECTEERDE currentUser, wat correct is.
                     const tasksOnDate = getTasksForDate(dateStringToDate(date), customTasks, currentUser);
                     
                     const isCompleted = tasksOnDate.length > 0 && tasksOnDate.every(task => logEntry[task.id] === true);
@@ -362,7 +369,6 @@
                                         />
                                         <div className="text-left">
                                             <p className="font-medium text-gray-50">{task.name}</p>
-                                            {/* Geen (Dag 1), (Dagelijks), of (Specifieke dagen) meer, behalve de Loopband context */}
                                             <p className="text-sm text-gray-400">{task.target}{task.targetDay}</p>
                                         </div>
                                     </div>
@@ -431,28 +437,38 @@
                 return (
                     <div className="p-4 space-y-6">
                         <h2 className="text-2xl font-bold text-gray-50 mb-4">1-Jaar Geschiedenis van {currentUser}</h2>
+                        
+                        {/* Aangepaste weekstart: Maandag */}
                         <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center font-semibold text-xs sm:text-sm text-indigo-400 bg-[#1e1e1e] p-2 rounded-lg shadow-inner">
-                            {['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'].map(day => (
+                            {['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].map(day => (
                                 <div key={day}>{day}</div>
                             ))}
                         </div>
 
                         {/* Weergeeft maanden van NIEUW naar OUD */}
-                        {Object.entries(groupedDates).map(([monthYear, dates]) => (
-                            <div key={monthYear}>
-                                <h3 className="text-lg font-bold text-indigo-400 my-3 border-b border-indigo-900 pb-1">{monthYear}</h3>
-                                <div className="grid grid-cols-7 gap-1 sm:gap-2">
-                                    {/* Padding voor de eerste dag van de maand */}
-                                    {Array.from({ length: dateStringToDate(dates[dates.length - 1]).getUTCDay() }).map((_, i) => (
-                                        <div key={`pad-${i}`} className="h-10 w-10 sm:h-12 sm:w-12"></div>
-                                    ))}
-                                    {/* Dagen van OUD naar NIEUW, zodat de maand onderaan vol is */}
-                                    {dates.reverse().map(dateString => (
-                                        <Cell key={dateString} dateString={dateString} />
-                                    ))}
+                        {Object.entries(groupedDates).map(([monthYear, dates]) => {
+                            // De eerste dag van de maand (laatste element in de array is de 1e dag van de maand)
+                            const firstDayOfMonth = dateStringToDate(dates[dates.length - 1]).getUTCDay(); // 0=Zo, 1=Ma, ...
+                            // Berekent het aantal padding-dagen om op Maandag te starten
+                            // (0=Zo wordt 6, 1=Ma wordt 0)
+                            const paddingDays = (firstDayOfMonth + 6) % 7; 
+
+                            return (
+                                <div key={monthYear}>
+                                    <h3 className="text-lg font-bold text-indigo-400 my-3 border-b border-indigo-900 pb-1">{monthYear}</h3>
+                                    <div className="grid grid-cols-7 gap-1 sm:gap-2">
+                                        {/* Padding voor de eerste dag van de maand */}
+                                        {Array.from({ length: paddingDays }).map((_, i) => (
+                                            <div key={`pad-${i}`} className="h-10 w-10 sm:h-12 sm:w-12"></div>
+                                        ))}
+                                        {/* Dagen van OUD naar NIEUW, zodat de maand onderaan vol is */}
+                                        {dates.reverse().map(dateString => (
+                                            <Cell key={dateString} dateString={dateString} />
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
 
                         <div className="mt-6 p-4 bg-[#1e1e1e] rounded-xl shadow-lg border border-gray-700">
                             <p className="font-semibold text-gray-300">Dagen Gevolgd: <span className="text-indigo-400">{dateArray.length}</span></p>
@@ -510,27 +526,24 @@
                         return;
                     }
 
-                    // Voorbeeldlogica om de standaarddagen in te stellen als de gebruiker een type selecteert
-                    let daysToAssign = [];
+                    // Stel standaard in op Ma-Za (DAYS_MON_SAT) of Dagelijks (DAYS_MON_SUN)
+                    let daysToAssign = DAYS_MON_SAT; 
                     if (newTask.type === 'dayOfWeek') {
-                         // Dit vereenvoudigt het formulier niet, maar is veiliger voor opslag
-                         // In dit voorbeeld gebruiken we de default Ma-Za om te starten
                          daysToAssign = DAYS_MON_SAT; 
                     } else if (newTask.type === 'daily') {
-                         daysToAssign = DAYS_MON_SAT;
+                         // Gebruik DAYS_MON_SUN als de gebruiker een 'dagelijkse' taak maakt
+                         daysToAssign = DAYS_MON_SUN;
                     }
 
 
                     const taskToAdd = {
                         ...newTask,
                         id: generateId(newTask.name),
-                        // Voor nieuwe taken: als 'daily' of 'dayOfWeek', gebruiken we Ma-Za, 
-                        // behalve voor specifieke gevallen zoals Bebe's Loopband die je handmatig moet toevoegen.
                         type: newTask.type === 'daily' ? 'dayOfWeek' : newTask.type,
                         days: daysToAssign,
-                        // Fix voor 'reps' indien niet ingevuld
-                        day1Target: newTask.day1Target.includes('herhalingen') ? newTask.day1Target.replace('herhalingen', 'reps') : newTask.day1Target,
-                        day2Target: newTask.day2Target.includes('herhalingen') ? newTask.day2Target.replace('herhalingen', 'reps') : newTask.day2Target,
+                        // Zorg ervoor dat 'reps' wordt gebruikt voor consistentie
+                        day1Target: newTask.day1Target.replace('herhalingen', 'reps'),
+                        day2Target: newTask.day2Target ? newTask.day2Target.replace('herhalingen', 'reps') : '',
                     };
 
 
@@ -552,9 +565,12 @@
                         <div className="bg-[#1e1e1e] p-5 rounded-xl shadow-lg space-y-3 border border-gray-700">
                             <h3 className="font-bold text-lg text-indigo-400 border-b border-gray-700 pb-2">Actieve Taken ({customTasks.length})</h3>
                             {customTasks.map(task => {
-                                const daysText = task.type === 'alternating' ? 'Oneven/Even' : 
-                                                 (task.days && task.days.length === DAYS_MON_SAT.length ? 'Maandag-Zaterdag' : 
-                                                 (task.days && task.days.includes(2) ? 'Di, Do, Za' : 'Specifieke Dagen'));
+                                const isDaily = task.days && task.days.length === DAYS_MON_SUN.length;
+                                const isMonSat = task.days && task.days.length === DAYS_MON_SAT.length;
+
+                                const daysText = task.type === 'alternating' ? 'Wisselend (Oneven/Even)' : 
+                                                 (isDaily ? 'Dagelijks (Ma-Zo)' : 
+                                                 (isMonSat ? 'Maandag-Zaterdag' : 'Specifieke Dagen'));
 
                                 return (
                                     <div key={task.id} className="flex justify-between items-center bg-gray-800 p-3 rounded-lg border border-gray-700">
@@ -593,7 +609,8 @@
                                     onChange={(e) => setNewTask({ ...newTask, type: e.target.value })}
                                     className="w-full p-2 border rounded-md focus:ring-indigo-500 focus:border-indigo-500"
                                 >
-                                    <option value="dayOfWeek">Elke dag behalve Zondag</option>
+                                    <option value="dayOfWeek">Maandag t/m Zaterdag</option>
+                                    <option value="daily">Dagelijks (incl. Zondag)</option>
                                     <option value="alternating">Wisselend (Dag 1 / Dag 2)</option>
                                 </select>
 
