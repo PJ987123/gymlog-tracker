@@ -59,7 +59,7 @@
         const DAYS_MON_SAT = [1, 2, 3, 4, 5, 6]; // Maandag t/m Zaterdag
         const DAYS_MON_SUN = [0, 1, 2, 3, 4, 5, 6]; // Maandag t/m Zondag
         const BEBE_TREADMILL_DAYS = [2, 4, 6]; // Dinsdag, Donderdag, Zaterdag
-        const USERS = ['Baba', 'Bebe'];
+        const USERS = ['PJ', 'Farah'];
 
         // --- React Dependencies ---
         const { useState, useEffect, useMemo } = React;
@@ -93,7 +93,7 @@
         
         // Nieuwe Standaard Routines met 'reps' en correcte zondag logica
         const DEFAULT_ROUTINES = {
-            Baba: [
+            PJ: [
                 // Dumbbells: 20 reps (oneven dagen) | 50 reps (even dagen)
                 { id: 'dbs', name: "Dumbbells", day1Target: "20 reps", day2Target: "50 reps", type: 'alternating' },
                 // Loopband: Elke dag behalve zondag (Ma-Za)
@@ -103,7 +103,7 @@
                 // Push-ups: Dagelijks (Inclusief Zondag)
                 { id: 'pushups', name: "Push-ups", day1Target: "50 reps", day2Target: "50 reps", type: 'dayOfWeek', days: DAYS_MON_SUN },
             ],
-            Bebe: [
+            Farah: [
                 // Loopband: Dinsdag, Donderdag, Zaterdag
                 { id: 'treadmill', name: "Loopband", day1Target: "30 minuten", day2Target: "30 minuten", type: 'dayOfWeek', days: BEBE_TREADMILL_DAYS },
                 // Sit-ups: Elke dag behalve zondag (Ma-Za)
@@ -714,3 +714,4 @@
     </script>
 </body>
 </html>
+
