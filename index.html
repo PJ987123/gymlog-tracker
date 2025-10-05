@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GymLog Tracker</title>
+
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Optional: Set a clean default font */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom scrollbar style for better aesthetics */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #a5b4fc;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #e0e7ff;
+        }
+    </style>
+
+    <!-- 
+    PWA METADATA 
+    (Firebase CDN imports have been removed as we are now using Local Storage.)
+    -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#4f46e5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="GymLog">
+    <!-- End PWA Meta Tags -->
+
+
+    <!-- Load React and Babel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- 
+    The following script contains your entire application code (WorkoutTracker.jsx), 
+    now refactored to use standard browser Local Storage instead of Firebase.
+    -->
+    <script type="text/babel">
+        // --- Global Variables Placeholder for Canvas Environment ---
+        // (Firebase config and auth tokens are no longer needed.)
+        const __app_id = 'workout-tracker-pwa-host';
+        const LOCAL_STORAGE_LOGS_KEY = `gymlog_${__app_id}_logs`;
+        const LOCAL_STORAGE_TASKS_KEY = `gymlog_${__app_id}_tasks`;
+
+        // --- React Dependencies ---
+        const { useState, useEffect, useMemo } = React;
+        
+        // --- Lucide React Icons Placeholder ---
+        const Calendar = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
+        const CheckSquare = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>;
+        const BarChart3 = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>;
+        const Settings = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.44a2 2 0 0 1-2 2h-.44a2 2 0 0 0-2 2v.44a2 2 0 0 1-2 2H2v.44a2 2 0 0 0 2 2h.44a2 2 0 0 1 2 2v.44a2 2 0 0 0 2 2h.44a2 2 0 0 1 2 2v.44a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.44a2 2 0 0 1 2-2h.44a2 2 0 0 0 2-2v-.44a2 2 0 0 1 2-2h.44v-.44a2 2 0 0 0-2-2h-.44a2 2 0 0 1-2-2v-.44a2 2 0 0 0-2-2v-.44a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>;
+        const Plus = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>;
+        const Trash2 = (props) => <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M14 4h-4"/></svg>;
+
+        // --- Start of WorkoutTracker.jsx Content ---
+
+        // Helper to format date as YYYY-MM-DD
+        const formatDate = (date) => date.toISOString().split('T')[0];
+
+        // Converts date string (YYYY-MM-DD) to Date object
+        const dateStringToDate = (dateString) => {
+            const [year, month, day] = dateString.split('-').map(Number);
+            // Use UTC to avoid timezone issues when working with dates
+            return new Date(Date.UTC(year, month - 1, day));
+        };
+
+        // Default Tasks (used before user saves their custom routine)
+        const DEFAULT_TASKS = [
+            { id: 'dbs', name: "Dumbbells", day1Target: "20 reps", day2Target: "50 reps", type: 'alternating' },
+            { id: 'treadmill', name: "Treadmill", day1Target: "30 minutes", day2Target: "30 minutes", type: 'daily' },
+            { id: 'situps', name: "Sit-ups", day1Target: "50 reps", day2Target: "50 reps", type: 'daily' },
+            { id: 'pushups', name: "Push-ups", day1Target: "50 reps", day2Target: "50 reps", type: 'daily' },
+        ];
+
+        // --- Main App Component ---
+        const App = () => {
+            // Replaced Firebase state with Local Storage state management
+            const [isLoading, setIsLoading] = useState(true);
+            const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
+            // logs: Stores all completed dates (YYYY-MM-DD: {taskId: true/false, ...})
+            const [logs, setLogs] = useState({}); 
+            // customTasks: Stores the user's routine
+            const [customTasks, setCustomTasks] = useState([]); 
+            const [activeTab, setActiveTab] = useState('Today'); 
+            const [message, setMessage] = useState(null);
+
+            // 1. Initial Data Load from Local Storage
+            useEffect(() => {
+                try {
+                    // Load Logs
+                    const storedLogs = localStorage.getItem(LOCAL_STORAGE_LOGS_KEY);
+                    if (storedLogs) {
+                        setLogs(JSON.parse(storedLogs));
+                    }
+                    
+                    // Load Routine
+                    const storedTasks = localStorage.getItem(LOCAL_STORAGE_TASKS_KEY);
+                    if (storedTasks) {
+                        setCustomTasks(JSON.parse(storedTasks));
+                    } else {
+                        // Initialize with default tasks if none are found
+                        setCustomTasks(DEFAULT_TASKS);
+                    }
+                    
+                    setIsLoading(false);
+                } catch (e) {
+                    console.error("Error loading data from local storage:", e);
+                    // Show error, but don't prevent use (data might just be lost/corrupted)
+                    setMessage({ type: 'error', text: 'Error loading data from your device.' });
+                    setIsLoading(false);
+                }
+            }, []); 
+
+            // 2. Local Storage Operations (Replacing Firestore calls)
+
+            // Function to toggle the completion status of a single task
+            const handleTaskToggle = (taskId, isCurrentlyCompleted) => {
+                const date = selectedDate;
+                const newStatus = !isCurrentlyCompleted;
+                
+                try {
+                    const currentDayLogs = logs[date] || {};
+                    
+                    // Create updated logs object
+                    const updatedLogs = {
+                        ...logs,
+                        [date]: { ...currentDayLogs, [taskId]: newStatus }
+                    };
+
+                    // Save to Local Storage and update state
+                    localStorage.setItem(LOCAL_STORAGE_LOGS_KEY, JSON.stringify(updatedLogs));
+                    setLogs(updatedLogs); 
+
+                    setMessage({ type: 'success', text: `${currentDayTasks.find(t => t.id === taskId)?.name} marked as ${newStatus ? 'Done' : 'Pending'}` });
+
+                } catch (e) {
+                    console.error("Error toggling task log in local storage:", e);
+                    setMessage({ type: 'error', text: 'Error saving data to your device.' });
+                }
+            };
+
+            // Function to save the custom routine
+            const saveRoutine = (tasksToSave) => {
+                try {
+                    localStorage.setItem(LOCAL_STORAGE_TASKS_KEY, JSON.stringify(tasksToSave));
+                    setCustomTasks(tasksToSave);
+                    setMessage({ type: 'success', text: 'Routine saved successfully!' });
+                } catch (e) {
+                    console.error("Error saving routine to local storage:", e);
+                    setMessage({ type: 'error', text: 'Error saving routine to your device.' });
+                }
+            };
+            
+            // Helper function to get tasks for a date (for stats calculation)
+            const getTasksForDate = (dateObj, routine) => {
+                if (!routine || routine.length === 0) return [];
+                const day = dateObj.getUTCDate();
+                const isDay2 = day % 2 === 0;
+                
+                return routine.map(task => ({
+                    id: task.id,
+                    name: task.name,
+                    target: task.type === 'alternating' && isDay2 ? task.day2Target : task.day1Target,
+                }));
+            };
+
+            // 3. Core Logic: Tasks for the selected day 
+            const currentDayTasks = useMemo(() => {
+                if (customTasks.length === 0) return [];
+
+                const dateObj = dateStringToDate(selectedDate);
+                const day = dateObj.getUTCDate();
+                const isDay2 = day % 2 === 0; // Use day of month parity for alternation
+
+                return customTasks.map(task => {
+                    const target = task.type === 'alternating' && isDay2 ? task.day2Target : task.day1Target;
+                    const targetDay = task.type === 'alternating' ? (isDay2 ? 'Day 2' : 'Day 1') : 'Daily';
+                    
+                    // Check if this task is completed for the selected date
+                    const isCompleted = !!logs[selectedDate]?.[task.id];
+
+                    return {
+                        id: task.id,
+                        name: task.name,
+                        target: target,
+                        targetDay: targetDay,
+                        isCompleted: isCompleted,
+                    };
+                });
+            }, [selectedDate, customTasks, logs]);
+
+            // Derived state: Is the *entire* day completed?
+            const isDayCompleted = useMemo(() => {
+                if (!currentDayTasks || currentDayTasks.length === 0) return false;
+                return currentDayTasks.every(task => task.isCompleted);
+            }, [currentDayTasks]);
+
+
+            // 4. Stats Calculation (Logic unchanged, now runs on local state)
+            const stats = useMemo(() => {
+                // Calculate the status for every logged date
+                const dailyCompletionStatus = Object.keys(logs).reduce((acc, date) => {
+                    const logEntry = logs[date];
+                    // IMPORTANT: Use the routine currently loaded in state for accurate stats
+                    const tasksOnDate = getTasksForDate(dateStringToDate(date), customTasks.length > 0 ? customTasks : DEFAULT_TASKS);
+                    
+                    // A day is completed if every required task ID has a 'true' log entry
+                    const isCompleted = tasksOnDate.every(task => logEntry[task.id] === true);
+                    acc[date] = isCompleted;
+                    return acc;
+                }, {});
+                
+                const completedDays = Object.values(dailyCompletionStatus).filter(status => status).length;
+
+                const dates = Object.keys(dailyCompletionStatus).sort();
+                let maxStreak = 0;
+                
+                // Finalize current streak check against today
+                const today = formatDate(new Date());
+                let streak = 0;
+
+                let tempDate = today;
+                // Check backwards from today for consecutive completed days
+                while(dailyCompletionStatus[tempDate] === true) {
+                    streak++;
+                    const d = dateStringToDate(tempDate);
+                    d.setUTCDate(d.getUTCDate() - 1);
+                    tempDate = formatDate(d);
+                }
+
+                // Calculate Max Streak (using the full history)
+                let currentStreak = 0;
+                for (let i = 0; i < dates.length; i++) {
+                    const date = dates[i];
+                    const isCompleted = dailyCompletionStatus[date];
+
+                    if (isCompleted) {
+                        currentStreak++;
+                    } else {
+                        maxStreak = Math.max(maxStreak, currentStreak);
+                        currentStreak = 0;
+                    }
+                }
+                maxStreak = Math.max(maxStreak, currentStreak);
+
+
+                return {
+                    completedDays,
+                    currentStreak: streak,
+                    maxStreak: maxStreak,
+                    dailyCompletionStatus // Pass the full map for History view
+                };
+            }, [logs, customTasks]);
+
+
+            // --- Component: DateSelector ---
+            const DateSelector = ({ date, setDate }) => {
+                const today = formatDate(new Date());
+                const maxDate = today;
+
+                const handleChange = (e) => {
+                    setDate(e.target.value);
+                };
+
+                return (
+                    <div className="flex justify-center items-center my-4">
+                        <input
+                            type="date"
+                            value={date}
+                            onChange={handleChange}
+                            max={maxDate}
+                            className="p-3 border-4 border-indigo-600 rounded-xl shadow-lg font-mono text-lg bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-150"
+                        />
+                    </div>
+                );
+            };
+
+            // --- Component: TasksView (Updated for Detailed Tracking) ---
+            const TasksView = () => (
+                <div className="space-y-4 p-4">
+                    <h2 className="text-xl font-bold text-gray-800 flex items-center justify-between">
+                        <span>Workout Tasks for {selectedDate}</span>
+                        <span className={`text-sm font-semibold px-3 py-1 rounded-full shadow-inner ${
+                            isDayCompleted ? 'bg-green-500 text-white' : 'bg-yellow-200 text-yellow-800'
+                        }`}>
+                            {isDayCompleted ? 'DAY COMPLETED' : 'IN PROGRESS'}
+                        </span>
+                    </h2>
+                    <div className="bg-white p-5 rounded-xl shadow-lg">
+                        <ul className="space-y-3">
+                            {currentDayTasks.map((task, index) => (
+                                <li key={task.id} className="flex justify-between items-center py-2 border-b last:border-b-0">
+                                    <div className="flex items-center space-x-3">
+                                        <input
+                                            type="checkbox"
+                                            checked={task.isCompleted}
+                                            onChange={() => handleTaskToggle(task.id, task.isCompleted)}
+                                            className="h-6 w-6 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+                                        />
+                                        <div className="text-left">
+                                            <p className="font-medium text-gray-800">{task.name}</p>
+                                            <p className="text-sm text-gray-500">{task.target} ({task.targetDay})</p>
+                                        </div>
+                                    </div>
+                                    <span className={`font-bold text-sm px-3 py-1 rounded-full ${task.isCompleted ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                                        {task.isCompleted ? 'Done' : 'Target'}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                    {currentDayTasks.length === 0 && (
+                        <div className="text-center p-8 bg-yellow-50 rounded-xl text-yellow-700 font-medium">
+                            No tasks defined. Go to the "Routines" tab to set up your workout!
+                        </div>
+                    )}
+                </div>
+            );
+
+            // --- Component: HistoryView ---
+            const HistoryView = () => {
+                const today = new Date();
+                const oneYearAgo = new Date(today);
+                oneYearAgo.setDate(today.getDate() - 364);
+
+                let dateArray = [];
+                let currentDate = new Date(oneYearAgo);
+
+                while (currentDate.getTime() <= today.getTime()) {
+                    dateArray.push(formatDate(currentDate));
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+
+                const Cell = ({ dateString }) => {
+                    const isDayCompleted = stats.dailyCompletionStatus[dateString] === true;
+                    const date = dateStringToDate(dateString).getUTCDate();
+                    const isToday = dateString === formatDate(new Date());
+
+                    return (
+                        <div
+                            title={dateString + (isDayCompleted ? ' (Completed)' : ' (Pending)')}
+                            onClick={() => {
+                                setSelectedDate(dateString);
+                                setActiveTab('Today');
+                            }}
+                            className={`h-10 w-10 sm:h-12 sm:w-12 flex items-center justify-center rounded-lg shadow-md transition-all duration-150 cursor-pointer text-sm
+                                ${isToday ? 'border-4 border-indigo-500 bg-indigo-100 text-indigo-800 font-extrabold' : ''}
+                                ${isDayCompleted && !isToday ? 'bg-green-500 text-white font-bold hover:bg-green-600' : ''}
+                                ${!isDayCompleted && !isToday ? 'bg-gray-200 text-gray-600 hover:bg-gray-300' : ''}
+                            `}
+                        >
+                            {date}
+                        </div>
+                    );
+                };
+
+                return (
+                    <div className="p-4">
+                        <h2 className="text-2xl font-bold text-gray-800 mb-6">1-Year History Calendar</h2>
+                        <p className="text-sm text-gray-600 mb-4">Click a date to view/edit tasks.</p>
+                        <div className="grid grid-cols-7 gap-1 sm:gap-2">
+                            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                                <div key={day} className="text-center font-semibold text-xs sm:text-sm text-indigo-600">
+                                    {day}
+                                </div>
+                            ))}
+                            {/* Add padding for the first day of the year-ago date */}
+                            {Array.from({ length: dateStringToDate(dateArray[0]).getUTCDay() }).map((_, i) => (
+                                <div key={`pad-${i}`} className="h-10 w-10 sm:h-12 sm:w-12"></div>
+                            ))}
+                            {dateArray.map(dateString => (
+                                <Cell key={dateString} dateString={dateString} />
+                            ))}
+                        </div>
+                        <div className="mt-6 p-4 bg-gray-50 rounded-lg border">
+                            <p className="font-semibold text-gray-700">Days Tracked: <span className="text-indigo-600">{dateArray.length}</span></p>
+                            <p className="font-semibold text-gray-700">Completed Days: <span className="text-green-600">{stats.completedDays}</span></p>
+                        </div>
+                    </div>
+                );
+            };
+
+            // --- Component: StatCard ---
+            const StatCard = ({ title, value, color }) => (
+                <div className={`p-4 rounded-xl shadow-md border ${color}`}>
+                    <p className="text-3xl font-extrabold">{value}</p>
+                    <p className="text-sm font-medium mt-1">{title}</p>
+                </div>
+            );
+
+            // --- Component: StatsView ---
+            const StatsView = () => (
+                <div className="p-4 space-y-6">
+                    <h2 className="text-2xl font-bold text-gray-800 mb-4">Your Progress</h2>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <StatCard title="Total Completed Days" value={stats.completedDays} color="bg-green-100 text-green-700" />
+                        <StatCard title="Current Streak" value={stats.currentStreak} color="bg-yellow-100 text-yellow-700" />
+                        <StatCard title="Max Streak" value={stats.maxStreak} color="bg-red-100 text-red-700" />
+                    </div>
+
+                    <div className="bg-white p-5 rounded-xl shadow-lg border border-indigo-200">
+                        <h3 className="font-bold text-lg text-indigo-700">App Status</h3>
+                        <ul className="mt-2 space-y-2 text-gray-600">
+                            <li className="flex items-center">
+                                <CheckSquare className="h-5 w-5 text-green-500 mr-2"/>
+                                Data is now saved **locally** on your device. No cloud storage needed!
+                            </li>
+                            <li className="flex items-center">
+                                <Settings className="h-5 w-5 text-indigo-500 mr-2"/>
+                                Use the **Routines** tab to customize your tasks.
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            );
+
+            // --- Component: RoutinesView (Custom Tasks Editor) ---
+            const RoutinesView = () => {
+                const [newTask, setNewTask] = useState({ id: '', name: '', day1Target: '', day2Target: '', type: 'daily' });
+
+                const generateId = (name) => name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10) + '_' + Date.now().toString().slice(-4);
+
+                const handleAddTask = (e) => {
+                    e.preventDefault();
+                    if (!newTask.name || !newTask.day1Target || (newTask.type === 'alternating' && !newTask.day2Target)) {
+                        setMessage({ type: 'error', text: 'Please fill out all required fields for the new task.' });
+                        return;
+                    }
+
+                    const taskToAdd = {
+                        ...newTask,
+                        id: generateId(newTask.name),
+                    };
+
+                    const updatedTasks = [...customTasks, taskToAdd];
+                    saveRoutine(updatedTasks);
+                    setNewTask({ id: '', name: '', day1Target: '', day2Target: '', type: 'daily' }); // Reset form
+                };
+
+                const handleDeleteTask = (taskId) => {
+                    const updatedTasks = customTasks.filter(task => task.id !== taskId);
+                    saveRoutine(updatedTasks);
+                };
+
+                // saveRoutine is now a simple wrapper for Local Storage
+                // (Definition moved above with other core functions)
+
+                return (
+                    <div className="p-4 space-y-6">
+                        <h2 className="text-2xl font-bold text-gray-800">Your Custom Routine</h2>
+
+                        {/* Task List */}
+                        <div className="bg-white p-5 rounded-xl shadow-lg space-y-3">
+                            <h3 className="font-bold text-lg text-indigo-700 border-b pb-2">Active Tasks ({customTasks.length})</h3>
+                            {customTasks.map(task => (
+                                <div key={task.id} className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border">
+                                    <div className="flex-grow">
+                                        <p className="font-medium text-gray-800">{task.name}</p>
+                                        <p className="text-xs text-gray-500">
+                                            {task.type === 'alternating' ? `Day 1: ${task.day1Target} / Day 2: ${task.day2Target}` : `Daily: ${task.day1Target}`}
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => handleDeleteTask(task.id)}
+                                        className="p-2 ml-4 text-red-500 hover:text-red-700 transition duration-150 rounded-full bg-red-100"
+                                    >
+                                        <Trash2 size={18} />
+                                    </button>
+                                </div>
+                            ))}
+                            {customTasks.length === 0 && <p className="text-gray-500 italic">No tasks defined yet.</p>}
+                        </div>
+
+                        {/* Add New Task Form */}
+                        <div className="bg-indigo-50 p-5 rounded-xl shadow-lg border-2 border-indigo-200">
+                            <h3 className="font-bold text-lg text-indigo-700 mb-4 flex items-center"><Plus size={20} className="mr-2"/> Add New Task</h3>
+                            <form onSubmit={handleAddTask} className="space-y-3">
+                                <input
+                                    type="text"
+                                    placeholder="Task Name (e.g., Pull-ups)"
+                                    value={newTask.name}
+                                    onChange={(e) => setNewTask({ ...newTask, name: e.target.value })}
+                                    className="w-full p-2 border rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                    required
+                                />
+                                <select
+                                    value={newTask.type}
+                                    onChange={(e) => setNewTask({ ...newTask, type: e.target.value, day2Target: e.target.value === 'daily' ? newTask.day1Target : '' })}
+                                    className="w-full p-2 border rounded-md focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                >
+                                    <option value="daily">Daily Goal</option>
+                                    <option value="alternating">Alternating (Day 1 / Day 2)</option>
+                                </select>
+
+                                <input
+                                    type="text"
+                                    placeholder={`Target (e.g., 3 sets of 10)`}
+                                    value={newTask.day1Target}
+                                    onChange={(e) => setNewTask({ ...newTask, day1Target: e.target.value })}
+                                    className="w-full p-2 border rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                    required
+                                />
+
+                                {newTask.type === 'alternating' && (
+                                    <input
+                                        type="text"
+                                        placeholder="Day 2 Target (e.g., 2 sets of 12)"
+                                        value={newTask.day2Target}
+                                        onChange={(e) => setNewTask({ ...newTask, day2Target: e.target.value })}
+                                        className="w-full p-2 border rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                        required
+                                    />
+                                )}
+
+                                <button
+                                    type="submit"
+                                    className="w-full p-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition duration-200 shadow-lg"
+                                >
+                                    Add Task to Routine
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                );
+            };
+
+            // --- Component: TabButton ---
+            const TabButton = ({ label, icon: Icon, tabName }) => (
+                <button
+                    onClick={() => setActiveTab(tabName)}
+                    className={`flex flex-col items-center justify-center p-2 flex-grow transition-all duration-200 ${
+                        activeTab === tabName ? 'text-indigo-600 border-t-2 border-indigo-600 bg-indigo-50 shadow-inner' : 'text-gray-500 hover:text-indigo-500'
+                    }`}
+                >
+                    <Icon size={20} />
+                    <span className="text-xs mt-1 font-medium hidden sm:block">{label}</span>
+                </button>
+            );
+
+            if (isLoading) {
+                return (
+                    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
+                        {/* Removed Loader, data load should be near instant now */}
+                        <p className="text-gray-600 font-medium">Loading local data...</p>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gray-50 flex flex-col items-center">
+                    {/* Header - Removed User ID display */}
+                    <div className="w-full max-w-lg bg-white shadow-lg p-3 flex justify-between items-center border-b">
+                        <h1 className="text-2xl font-extrabold text-indigo-600">GymLog</h1>
+                        <span className="text-sm text-gray-500 px-3 py-1 rounded-full bg-indigo-100 font-medium">Offline Ready</span>
+                    </div>
+
+                    <main className="w-full max-w-lg flex-grow">
+                        {message && (
+                            <div className={`p-3 text-center font-medium ${message.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                {message.text}
+                            </div>
+                        )}
+
+                        {activeTab === 'Today' && (
+                            <>
+                                <DateSelector date={selectedDate} setDate={setSelectedDate} />
+                                <TasksView />
+                            </>
+                        )}
+                        {activeTab === 'History' && <HistoryView />}
+                        {activeTab === 'Stats' && <StatsView />}
+                        {activeTab === 'Routines' && <RoutinesView />}
+
+                        {/* Padding to push content up */}
+                        <div className="h-20"></div>
+                    </main>
+
+                    {/* Mobile Tab Bar */}
+                    <div className="fixed bottom-0 w-full max-w-lg bg-white border-t shadow-2xl flex justify-around h-14 z-10">
+                        <TabButton label="Today" icon={CheckSquare} tabName="Today" />
+                        <TabButton label="History" icon={Calendar} tabName="History" />
+                        <TabButton label="Stats" icon={BarChart3} tabName="Stats" />
+                        <TabButton label="Routines" icon={Settings} tabName="Routines" />
+                    </div>
+                </div>
+            );
+        }
+
+        // --- End of WorkoutTracker.jsx Content ---
+
+        // Mount the App component
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
